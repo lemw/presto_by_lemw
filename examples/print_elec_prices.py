@@ -2,6 +2,7 @@ import network
 import time
 import urequests
 import secrets
+import math
 from presto import Presto
 
 # Initialize Presto
@@ -46,30 +47,7 @@ def get_data(date_str):
         print(f"Error fetching data: {e}")
     return []
 
-def run():
-    connect_wifi()
-    
-    # Show connection status on screen
-    display.set_pen(BLACK)
-    display.clear()
-    display.set_pen(WHITE)
-    display.text(f"Connected to {secrets.WIFI_SSID}", 10, 10)
-    presto.update()
-    time.sleep(1)
-    
-    # Get current date info
-    now = time.localtime()
-    today = "{:04d}/{:02d}-{:02d}".format(now[0], now[1], now[2])
-    today_iso = f"{now[0]:04d}-{now[1]:02d}-{now[2]:02d}"
-    print(f"Today's date: {today}")
-    
-    # Calculate tomorrow's date
-    tomorrow_ts = time.time() + 86400
-    tm = time.localtime(tomorrow_ts)
-    tomorrow = "{:04d}/{:02d}-{:02d}".format(tm[0], tm[1], tm[2])
-    tomorrow_iso = f"{tm[0]:04d}-{tm[1]:02d}-{tm[2]:02d}"
-    print(f"Tomorrow's date: {tomorrow}")
-
+def fetch_and_process_data(today, tomorrow):
     # Show fetching status
     display.text("Fetching today's and tomorrow's data...", 10, 30)
     presto.update()
@@ -102,17 +80,10 @@ def run():
     
     all_prices = consolidated
     print(f"Consolidated to {len(all_prices)} hourly entries")
+    
+    return all_prices
 
-    # Group by day
-    today_entries = [e for e in all_prices if e['time_start'].startswith(today_iso)]
-    tomorrow_entries = [e for e in all_prices if e['time_start'].startswith(tomorrow_iso)]
-
-    # Show displaying status
-    display.text("Displaying prices...", 10, 70)
-    presto.update()
-    time.sleep(1)
-
-    # Now display the prices
+def display_prices(all_prices, today_entries, tomorrow_entries):
     display.set_pen(BLACK)
     display.clear()
     display.set_pen(WHITE)
@@ -132,9 +103,9 @@ def run():
         min_price = min(entry['SEK_per_kWh'] for entry in all_prices)
         max_price = max(entry['SEK_per_kWh'] for entry in all_prices)
         
-        line_height = 14  # Adjusted for alignment
+        line_height = 15  # For better spacing
         
-        # Start columns at y=20 for more space
+        # Start columns at y=45 as requested
         y_start = 45
         
         # Display today's entries, aligned by hour
@@ -142,7 +113,7 @@ def run():
         for entry in today_entries:
             t = entry['time_start']
             hour_num = int(t[11:13])
-            y = y_start + hour_num * line_height
+            y = y_start + hour_num * line_height - 1
             if y > HEIGHT - 16:  # Skip if below screen
                 continue
             display_time = f"{t[11:16]}"  # Just time, since date is header
@@ -174,7 +145,7 @@ def run():
         for entry in tomorrow_entries:
             t = entry['time_start']
             hour_num = int(t[11:13])
-            y = y_start + hour_num * line_height
+            y = y_start + hour_num * line_height - 1
             if y > HEIGHT - 16:  # Skip if below screen
                 continue
             display_time = f"{t[11:16]}"
@@ -201,6 +172,121 @@ def run():
             
             display.text(txt, x, y, scale=2)
 
+def display_plot(all_prices):
+    display.set_pen(BLACK)
+    display.clear()
+    display.set_pen(WHITE)
+    
+    prices = [e['SEK_per_kWh'] for e in all_prices]
+    min_p = min(prices)
+    max_p = max(prices)
+    plot_width = WIDTH - 60  # Leave space for axis
+    plot_height = HEIGHT - 20
+    x_offset = 60
+    y_offset = 10
+    
+    # Draw axes
+    display.line(x_offset, y_offset, x_offset, y_offset + plot_height)  # Vertical axis
+    display.line(x_offset, y_offset + plot_height, x_offset + plot_width, y_offset + plot_height)  # Horizontal axis
+    
+    # Draw scale on left
+    num_ticks = 5
+    for i in range(num_ticks + 1):
+        tick_y = y_offset + plot_height - i * plot_height // num_ticks
+        tick_value = min_p + i * (max_p - min_p) / num_ticks
+        display.line(x_offset - 5, tick_y, x_offset, tick_y)  # Tick mark
+        display.text(f"{tick_value:.2f}", 5, tick_y - 5, scale=1)
+    
+    # Draw the plot lines (2 pixels wide)
+    for i in range(len(prices) - 1):
+        x1 = x_offset + i * plot_width // (len(prices) - 1)
+        y1 = y_offset + plot_height - int((prices[i] - min_p) / (max_p - min_p) * plot_height)
+        x2 = x_offset + (i + 1) * plot_width // (len(prices) - 1)
+        y2 = y_offset + plot_height - int((prices[i + 1] - min_p) / (max_p - min_p) * plot_height)
+        display.line(x1, y1, x2, y2)
+        display.line(x1, y1 + 1, x2, y2 + 1)  # Second line for 2-pixel width
+
+def run():
+    connect_wifi()
+    
+    # Show connection status on screen
+    display.set_pen(BLACK)
+    display.clear()
+    display.set_pen(WHITE)
+    display.text(f"Connected to {secrets.WIFI_SSID}", 10, 10)
     presto.update()
+    time.sleep(1)
+    
+    # Get current date info
+    now = time.localtime()
+    today = "{:04d}/{:02d}-{:02d}".format(now[0], now[1], now[2])
+    today_iso = f"{now[0]:04d}-{now[1]:02d}-{now[2]:02d}"
+    print(f"Today's date: {today}")
+    
+    # Calculate tomorrow's date
+    tomorrow_ts = time.time() + 86400
+    tm = time.localtime(tomorrow_ts)
+    tomorrow = "{:04d}/{:02d}-{:02d}".format(tm[0], tm[1], tm[2])
+    tomorrow_iso = f"{tm[0]:04d}-{tm[1]:02d}-{tm[2]:02d}"
+    print(f"Tomorrow's date: {tomorrow}")
+
+    all_prices = fetch_and_process_data(today, tomorrow)
+
+    # Group by day
+    today_entries = [e for e in all_prices if e['time_start'].startswith(today_iso)]
+    tomorrow_entries = [e for e in all_prices if e['time_start'].startswith(tomorrow_iso)]
+
+    # Initial display
+    display_prices(all_prices, today_entries, tomorrow_entries)
+    presto.update()
+
+    state = 'prices'
+    last_touched = False
+    start_x = None
+    start_y = None
+
+    while True:
+        presto.touch_poll()
+        touched = presto.touch_a.touched
+        
+        if touched and not last_touched:
+            start_x = presto.touch_a.x
+            start_y = presto.touch_a.y
+        elif not touched and last_touched:
+            if start_x is not None:
+                end_x = presto.touch_a.x
+                end_y = presto.touch_a.y
+                dx = end_x - start_x
+                dy = end_y - start_y
+                distance = math.sqrt(dx**2 + dy**2)
+                angle = math.atan2(dy, dx) * 180 / math.pi % 360
+                print(f"Swipe detected: distance {distance:.1f}, angle {angle:.1f}")
+                if distance > 30 and 60 <= angle <= 120:
+                    # Refresh data
+                    display.set_pen(BLACK)
+                    display.clear()
+                    display.set_pen(WHITE)
+                    all_prices = fetch_and_process_data(today, tomorrow)
+                    today_entries = [e for e in all_prices if e['time_start'].startswith(today_iso)]
+                    tomorrow_entries = [e for e in all_prices if e['time_start'].startswith(tomorrow_iso)]
+                    display_prices(all_prices, today_entries, tomorrow_entries)
+                    presto.update()
+                    state = 'prices'
+            start_x = None
+            start_y = None
+
+        if state == 'prices':
+            if touched and not last_touched:
+                display_plot(all_prices)
+                presto.update()
+                state = 'plot'
+        elif state == 'plot':
+            if touched and not last_touched:
+                display_prices(all_prices, today_entries, tomorrow_entries)
+                presto.update()
+                state = 'prices'
+
+        last_touched = touched
+        time.sleep(0.1)  # Small delay to debounce
 
 run()

@@ -1,6 +1,3 @@
-#secrets
-secrets.py
-
 # Prerequisites
 *.d
 
@@ -40,3 +37,9 @@ secrets.py
 # Apple filesystem cruft
 .DS_Store
 venv
+
+#secrets
+examples/secrets.py
+
+# python cache
+__pycache__/
