@@ -197,14 +197,28 @@ def display_plot(all_prices):
         display.line(x_offset - 5, tick_y, x_offset, tick_y)  # Tick mark
         display.text(f"{tick_value:.2f}", 5, tick_y - 5, scale=1)
     
-    # Draw the plot lines (2 pixels wide)
-    for i in range(len(prices) - 1):
-        x1 = x_offset + i * plot_width // (len(prices) - 1)
-        y1 = y_offset + plot_height - int((prices[i] - min_p) / (max_p - min_p) * plot_height)
-        x2 = x_offset + (i + 1) * plot_width // (len(prices) - 1)
-        y2 = y_offset + plot_height - int((prices[i + 1] - min_p) / (max_p - min_p) * plot_height)
-        display.line(x1, y1, x2, y2)
-        display.line(x1, y1 + 1, x2, y2 + 1)  # Second line for 2-pixel width
+    # Draw histogram bars
+    num_bars = len(prices)
+    bar_width = plot_width // num_bars
+    for i, price in enumerate(prices):
+        x = x_offset + i * bar_width
+        bar_height = int((price - min_p) / (max_p - min_p) * plot_height) if max_p > min_p else 0
+        y = y_offset + plot_height - bar_height
+        
+        # Calculate color same as text
+        norm = (price - min_p) / (max_p - min_p) if max_p > min_p else 0.0
+        if norm <= 0.5:
+            r = int(510 * norm)
+            g = 255
+            b = 0
+        else:
+            r = 255
+            g = int(255 - 510 * (norm - 0.5))
+            b = 0
+        
+        color = display.create_pen(r, g, b)
+        display.set_pen(color)
+        display.rectangle(x, y, bar_width - 1, bar_height)
 
 def run():
     connect_wifi()
