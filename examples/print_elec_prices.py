@@ -103,13 +103,6 @@ def run():
     all_prices = consolidated
     print(f"Consolidated to {len(all_prices)} hourly entries")
 
-    # Filter to next 24 hours from now
-    now = time.localtime()
-    now_str = f"{now[0]:04d}-{now[1]:02d}-{now[2]:02d}T{now[3]:02d}:00:00"
-    future_prices = [entry for entry in all_prices if entry['time_start'] >= now_str][:24]
-    all_prices = future_prices
-    print(f"Filtered to next {len(all_prices)} hours")
-
     # Group by day
     today_entries = [e for e in all_prices if e['time_start'].startswith(today_iso)]
     tomorrow_entries = [e for e in all_prices if e['time_start'].startswith(tomorrow_iso)]
@@ -139,20 +132,19 @@ def run():
         min_price = min(entry['SEK_per_kWh'] for entry in all_prices)
         max_price = max(entry['SEK_per_kWh'] for entry in all_prices)
         
-        line_height = 17  # Adjusted for scale=2 font height
+        line_height = 14  # Adjusted for alignment
         
-        # Align bottoms: calculate start y so last entries align at bottom
-        n_today = len(today_entries)
-        n_tomorrow = len(tomorrow_entries)
-        bottom_y = HEIGHT - 20
-        today_start_y = max(50, bottom_y - (n_today - 1) * line_height) if n_today > 0 else 60
-        tomorrow_start_y = max(50, bottom_y - (n_tomorrow - 1) * line_height) if n_tomorrow > 0 else 60
+        # Start columns at y=20 for more space
+        y_start = 45
         
-        # Display today's entries
-        y = today_start_y
+        # Display today's entries, aligned by hour
         x = 10
         for entry in today_entries:
             t = entry['time_start']
+            hour_num = int(t[11:13])
+            y = y_start + hour_num * line_height
+            if y > HEIGHT - 16:  # Skip if below screen
+                continue
             display_time = f"{t[11:16]}"  # Just time, since date is header
             price = entry['SEK_per_kWh']
             txt = f"{display_time}: {price:.2f}"
@@ -176,14 +168,15 @@ def run():
             display.set_pen(color)
             
             display.text(txt, x, y, scale=2)
-            
-            y += line_height
         
-        # Display tomorrow's entries
-        y = tomorrow_start_y
+        # Display tomorrow's entries, aligned by hour
         x = 250
         for entry in tomorrow_entries:
             t = entry['time_start']
+            hour_num = int(t[11:13])
+            y = y_start + hour_num * line_height
+            if y > HEIGHT - 16:  # Skip if below screen
+                continue
             display_time = f"{t[11:16]}"
             price = entry['SEK_per_kWh']
             txt = f"{display_time}: {price:.2f}"
@@ -207,8 +200,6 @@ def run():
             display.set_pen(color)
             
             display.text(txt, x, y, scale=2)
-            
-            y += line_height
 
     presto.update()
 
